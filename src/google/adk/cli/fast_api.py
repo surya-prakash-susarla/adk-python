@@ -281,6 +281,12 @@ def get_fast_api_app(
   else:
     session_service = InMemorySessionService()
 
+  @app.middleware("http")
+  async def log_worker_pid(request, call_next):
+    print(f"[PID {os.getpid()}] Handling request: {request.url}")
+    response = await call_next(request)
+    return response
+
   @app.get("/list-apps")
   def list_apps() -> list[str]:
     base_path = Path.cwd() / agent_dir

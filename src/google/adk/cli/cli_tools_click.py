@@ -19,9 +19,9 @@ from datetime import datetime
 import logging
 import os
 import tempfile
-from typing import AsyncGenerator
-from typing import Coroutine
 from typing import Optional
+import sys
+import subprocess
 
 import click
 from fastapi import FastAPI
@@ -462,7 +462,7 @@ def cli_eval(
     "--workers",
     type=int,
     default=1,
-    help="Optional. Set number of workers to run the server."
+    help="Optional. Set number of workers to run the server.",
 )
 def cli_web(
     agents_dir: str,
@@ -473,7 +473,7 @@ def cli_web(
     port: int = 8000,
     trace_to_cloud: bool = False,
     reload: bool = True,
-    workers: int = 1
+    workers: int = 1,
 ):
   """Starts a FastAPI server with Web UI for agents.
 
@@ -517,11 +517,7 @@ def cli_web(
       lifespan=_lifespan,
   )
   config = uvicorn.Config(
-      app,
-      host=host,
-      port=port,
-      reload=reload,
-      workers=workers
+      app, host=host, port=port, reload=reload, workers=workers
   )
 
   server = uvicorn.Server(config)
@@ -592,7 +588,7 @@ def cli_web(
     "--workers",
     default=1,
     type=int,
-    help="Optional. Set number of workers to run the server."
+    help="Optional. Set number of workers to run the server.",
 )
 def cli_api_server(
     agents_dir: str,
@@ -779,3 +775,73 @@ def cli_deploy_cloud_run(
     )
   except Exception as e:
     click.secho(f"Deploy failed: {e}", fg="red", err=True)
+    return
+
+
+"""Custom process launcher"""
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+  click.secho(
+      f"""
+    +-----------------------------------------------------------------------------+
+    | ADK Web Server started                                                      |
+    |                                                                             |
+    | For local testing, access at http://localhost:{8000}.{" "*(29 - len(str("8000")))}|
+    +-----------------------------------------------------------------------------+
+    """,
+      fg="green",
+  )
+  yield  # Startup is done, now app is running
+  click.secho(
+      """
+    +-----------------------------------------------------------------------------+
+    | ADK Web Server shutting down...                                             |
+    +-----------------------------------------------------------------------------+
+    """,
+      fg="green",
+  )
+
+app = get_fast_api_app(
+    agent_dir=os.getcwd(),
+    session_db_url="",
+    allow_origins=None,
+    web=True,
+    trace_to_cloud=False,
+    lifespan=_lifespan,
+)
+"""Custom worker runner"""
+
+
+@main.command("supraa")
+@click.option(
+    "--log_level",
+    type=click.Choice(
+        ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False
+    ),
+    default="DEBUG",
+    help="Optional. Set the logging level",
+)
+def cli_supraa(log_level: str = "INFO"):
+  """Starts a FastAPI server with Web UI for agents."""
+
+  logs.setup_adk_logger(getattr(logging, log_level.upper()))
+
+  subprocess.run(
+      [
+          sys.executable,
+          "-m",
+          "uvicorn",
+          "google.adk.cli.cli_tools_click:app",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8000",
+          "--workers",
+          "4",
+      ],
+      check=True,
+  )
+
+  return
