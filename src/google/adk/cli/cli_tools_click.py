@@ -22,6 +22,8 @@ import tempfile
 from typing import Optional
 import sys
 import subprocess
+from pathlib import Path
+import stat
 
 import click
 from fastapi import FastAPI
@@ -779,8 +781,6 @@ def cli_deploy_cloud_run(
 
 
 """Custom process launcher"""
-
-
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
   click.secho(
@@ -803,9 +803,28 @@ async def _lifespan(app: FastAPI):
       fg="green",
   )
 
+def get_session_db_url() -> str:
+    # Step 1: Resolve path
+    session_path = os.getenv("SUPRAA_SESSION")
+    resolved_path = Path(session_path).expanduser().resolve() if session_path else Path(".supraa_temp_session.db").resolve()
+
+    # Step 2: Ensure parent directory exists and is writable
+    resolved_path.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(resolved_path.parent, stat.S_IRWXU)  # user: rwx (700)
+
+    # Step 3: Create the DB file if it doesn't exist
+    if not resolved_path.exists():
+        resolved_path.touch()
+    
+    # Step 4: Apply strict permissions to the DB file: rw-------
+    os.chmod(resolved_path, stat.S_IRUSR | stat.S_IWUSR)
+
+    # Step 5: Return absolute path with proper prefix
+    return f"sqlite:///{resolved_path}"
+
 app = get_fast_api_app(
     agent_dir=os.getcwd(),
-    session_db_url="",
+    session_db_url=get_session_db_url(),
     allow_origins=None,
     web=True,
     trace_to_cloud=False,
@@ -824,7 +843,7 @@ app = get_fast_api_app(
     help="Optional. Set the logging level",
 )
 def cli_supraa(log_level: str = "INFO"):
-  """Starts a FastAPI server with Web UI for agents."""
+  """Supraa version of the webui launcher, overclocked to have multiple workers."""
 
   logs.setup_adk_logger(getattr(logging, log_level.upper()))
 
