@@ -458,6 +458,12 @@ def cli_eval(
     ),
     default=os.getcwd,
 )
+@click.option(
+    "--workers",
+    type=int,
+    default=1,
+    help="Optional. Set number of workers to run the server."
+)
 def cli_web(
     agents_dir: str,
     session_db_url: str = "",
@@ -467,6 +473,7 @@ def cli_web(
     port: int = 8000,
     trace_to_cloud: bool = False,
     reload: bool = True,
+    workers: int = 1
 ):
   """Starts a FastAPI server with Web UI for agents.
 
@@ -514,6 +521,7 @@ def cli_web(
       host=host,
       port=port,
       reload=reload,
+      workers=workers
   )
 
   server = uvicorn.Server(config)
@@ -580,6 +588,12 @@ def cli_web(
     ),
     default=os.getcwd(),
 )
+@click.option(
+    "--workers",
+    default=1,
+    type=int,
+    help="Optional. Set number of workers to run the server."
+)
 def cli_api_server(
     agents_dir: str,
     session_db_url: str = "",
@@ -589,6 +603,7 @@ def cli_api_server(
     port: int = 8000,
     trace_to_cloud: bool = False,
     reload: bool = True,
+    workers: int = 1,
 ):
   """Starts a FastAPI server for agents.
 
@@ -612,6 +627,7 @@ def cli_api_server(
       host=host,
       port=port,
       reload=reload,
+      workers=workers,  # This enables multiple worker processes in Uvicorn
   )
   server = uvicorn.Server(config)
   server.run()
